@@ -10,7 +10,6 @@ use VDB\Spider\Spider;
 use Spatie\Robots\Robots;
 use Illuminate\Console\Command;
 use VDB\Spider\Event\SpiderEvents;
-use Symfony\Component\EventDispatcher\Event;
 use VDB\Spider\QueueManager\InMemoryQueueManager;
 use VDB\Spider\QueueManager\QueueManagerInterface;
 use VDB\Spider\Filter\Prefetch\AllowedHostsFilter;
@@ -37,9 +36,9 @@ class SitemapCommand extends Command
     /**
      * Generate the sitemap
      *
-     * @return void
+     * @return int
      */
-    public function handle()
+    public function handle(): int
     {
         // Crawl the site
         $this->info('Starting site crawl...');
@@ -51,6 +50,8 @@ class SitemapCommand extends Command
 
         // Signal completion
         $this->info('Sitemap generation completed.');
+
+        return Command::SUCCESS;
     }
 
     /**
@@ -59,7 +60,7 @@ class SitemapCommand extends Command
      * @param string $url
      * @return array $resources
      */
-    protected function crawlWebsite($url)
+    protected function crawlWebsite(string $url): array
     {
         // Load the robots.txt from the site.
         $robots_url = $url . '/robots.txt';
@@ -71,7 +72,7 @@ class SitemapCommand extends Command
 
         // Add a URI discoverer. Without it, the spider does nothing.
         // In this case, we want <a> tags and the canonical link
-        $spider->getDiscovererSet()->set(new XPathExpressionDiscoverer("//a|//link[@rel=\"canonical\"]"));
+        $spider->getDiscovererSet()->set(new XPathExpressionDiscoverer("//a|//link[@rel=\"canonical\"]//a"));
         $spider->getDiscovererSet()->addFilter(new AllowedHostsFilter([$url], true));
 
         // Set limits
@@ -81,8 +82,8 @@ class SitemapCommand extends Command
         // Let's add something to enable us to stop the script
         $spider->getDispatcher()->addListener(
             SpiderEvents::SPIDER_CRAWL_USER_STOPPED,
-            function (Event $event) {
-                consoleOutput()->error("Crawl aborted.");
+            function () {
+                echo "Crawl aborted.";
                 exit();
             }
         );
@@ -104,8 +105,8 @@ class SitemapCommand extends Command
         $this->comment("Failed:    " . count($statsHandler->getFailed()));
         $this->comment("Persisted: " . count($statsHandler->getPersisted()));
 
-        // Finally we could do some processing on the downloaded resources
-        // In this example, we will echo the title of all resources
+        // Finally, we could do some processing on the downloaded resources
+        // In this example we will echo the title of all resources
         $this->comment("\nResources:");
         $resources = [];
         foreach ($spider->getDownloader()->getPersistenceHandler() as $resource) {
@@ -116,7 +117,10 @@ class SitemapCommand extends Command
             // <meta name="robots" content="noindex, nofollow" />
             $noindex = false;
             if ($resource->getCrawler()->filterXpath('//meta[@name="robots"]')->count() > 0) {
-                $noindex = (strpos($resource->getCrawler()->filterXpath('//meta[@name="robots"]')->attr('content'), 'noindex') !== false);
+                $noindex = (str_contains(
+                    $resource->getCrawler()->filterXpath('//meta[@name="robots"]')->attr('content'),
+                    'noindex'
+                ));
 
                 $this->info(sprintf(" - Skipping %s (on-page no-index)", $url));
             }
@@ -160,10 +164,11 @@ class SitemapCommand extends Command
     /**
      * Write the sitemap as a file.
      *
-     * @param array $resources
+     * @param  array  $resources
+     *
      * @return void
      **/
-    protected function writeSitemap($resources)
+    protected function writeSitemap(array $resources): void
     {
         // Prepare XML
         $urlset = new SimpleXMLElement('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="https://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xsi="https://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="https://www.sitemaps.org/schemas/sitemap/0.9 https://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd"></urlset>');
@@ -190,7 +195,7 @@ class SitemapCommand extends Command
         $dom->loadXML($urlset->asXML());
         $dom->formatOutput = true;
 
-        // Write file
+        // Write a file
         try {
             file_put_contents(public_path() . '/sitemap.xml', $dom->saveXML());
         } catch (Exception $exception) {

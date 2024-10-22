@@ -15,43 +15,48 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 class StatsHandler implements EventSubscriberInterface
 {
     /** @var string */
-    protected $spiderId;
+    protected string $spiderId;
 
-    protected $persisted = array();
+    protected array $persisted = [];
 
-    protected $queued = array();
+    protected array $queued = [];
 
-    protected $filtered = array();
+    protected array $filtered = [];
 
-    protected $failed = array();
+    protected array $failed = [];
 
     public static function getSubscribedEvents(): array
     {
-        return array(
+        return [
             SpiderEvents::SPIDER_CRAWL_FILTER_POSTFETCH => 'addToFiltered',
             SpiderEvents::SPIDER_CRAWL_FILTER_PREFETCH => 'addToFiltered',
             SpiderEvents::SPIDER_CRAWL_POST_ENQUEUE => 'addToQueued',
             SpiderEvents::SPIDER_CRAWL_RESOURCE_PERSISTED => 'addToPersisted',
             SpiderEvents::SPIDER_CRAWL_ERROR_REQUEST => 'addToFailed'
-        );
+        ];
     }
 
-    public function addToQueued(GenericEvent $event)
+    private function getSpiderId(): string
+    {
+        return $this->spiderId;
+    }
+
+    public function addToQueued(GenericEvent $event): void
     {
         $this->queued[] = $event->getArgument('uri');
     }
 
-    public function addToPersisted(GenericEvent $event)
+    public function addToPersisted(GenericEvent $event): void
     {
         $this->persisted[] = $event->getArgument('uri');
     }
 
-    public function addToFiltered(GenericEvent $event)
+    public function addToFiltered(GenericEvent $event): void
     {
         $this->filtered[] = $event->getArgument('uri');
     }
 
-    public function addToFailed(GenericEvent $event)
+    public function addToFailed(GenericEvent $event): void
     {
         $this->failed[$event->getArgument('uri')->toString()] = $event->getArgument('message');
     }
